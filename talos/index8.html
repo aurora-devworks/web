@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Map Editor - Tablet Edition</title>
+
+<style>
+*{
+    box-sizing:border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+
+body{
+    margin:0;
+    background:#222;
+    font-family:Arial,sans-serif;
+    overflow: hidden;
+    user-select: none;
+}
+
+.toolbar{
+    min-height:64px;
+    background:#333;
+    color:white;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:8px 16px;
+    flex-wrap: wrap;
+    touch-action: auto;
+}
+
+button{
+    padding:10px 16px;
+    font-size: 15px;
+    font-weight: bold;
+    border-radius: 6px;
+    border: none;
+    background: #444;
+    color: white;
+    cursor:pointer;
+    min-height: 44px;
+    touch-action: manipulation;
+}
+
+button:active {
+    background: #555;
+}
+
+#drawLineBtn.active{
+    background:limegreen;
+    color:black;
+}
+
+label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    touch-action: manipulation;
+}
+
+select, input[type="range"], input[type="color"] {
+    cursor: pointer;
+    min-height: 40px;
+    font-size: 14px;
+    border-radius: 4px;
+    touch-action: manipulation;
+}
+
+input[type="color"] {
+    width: 44px;
+    height: 44px;
+    border: none;
+    background: transparent;
+}
+
+.app{
+    display:flex;
+    height:calc(100vh - 64px);
+    padding:12px;
+    gap:12px;
+    overflow: hidden;
+}
+
+.boards-container{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    gap:24px;
+    overflow:auto;
+    padding-right:10px;
+    touch-action: auto; 
+    -webkit-overflow-scrolling: touch;
+}
+
+.board-wrapper{
+    display:flex;
+    flex-direction:column;
+    width:1920px;
+}
+
+.board-label{
+    color:#fff;
+    font-size:18px;
+    font-weight:bold;
+    letter-spacing:1px;
+    margin-bottom:8px;
+}
+
+.board{
+    width:1920px;
+    height:1080px;
+    position:relative;
+    overflow:hidden;
+    background:white;
+    border:2px solid #666;
+    background-image:
+        linear-gradient(#ddd 1px, transparent 1px),
+        linear-gradient(90deg,#ddd 1px,transparent 1px);
+    background-size:50px 50px;
+}
+
+.lineLayer{
+    position:absolute;
+    inset:0;
+    z-index:1;
+    width:100%;
+    height:100%;
+    pointer-events: none;
+}
+
+.iconLayer{
+    position:absolute;
+    inset:0;
+    z-index:2;
+    pointer-events: none;
+}
+
+.sidebar{
+    width:180px;
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:10px;
+    overflow-y:auto;
+    touch-action: pan-y;
+    background: #2a2a2a;
+    padding: 10px;
+    border-radius: 8px;
+    -webkit-overflow-scrolling: touch;
+}
+
+#touchDragProxy {
+    position: fixed;
+    width: 60px;
+    height: 60px;
+    background: #444;
+    color: white;
+    font-size: 10px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    border-radius: 8px;
+    pointer-events: none;
+    z-index: 9999;
+    display: none;
+    transform: translate(-50%, -50%);
+    opacity: 0.85;
+}
+
+.palette-icon{
+    width:70px;
+    height:70px;
+    background:#444;
+    color: white;
+    font-size: 11px;
+    font-weight: bold;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    border:2px solid #555;
+    cursor:grab;
+    user-select: none;
+    border-radius: 8px;
+    touch-action: none;
+}
+
+.tile{
+    position:absolute;
+    width:50px;
+    height:50px;
+    color: white;
+    font-size: 10px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 4px;
+    cursor:move;
+    transform-origin:center center;
+    pointer-events: auto;
+    touch-action: none;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.tile.selected{
+    outline:3px solid dodgerblue;
+}
+
+.line-handle{
+    fill:dodgerblue;
+    stroke:white;
+    stroke-width:3;
+    display:none;
+    cursor:pointer;
+    touch-action: none;
+}
+
+@media (max-aspect-ratio: 1/1) {
+    .app {
+        flex-direction: column;
+    }
+    .sidebar {
+        width: 100%;
+        height: 120px;
+        grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+        grid-auto-flow: column;
+        overflow-x: auto;
+        overflow-y: hidden;
+        touch-action: pan-x;
+    }
+}
+</style>
+</head>
+<body>
+
+<div id="touchDragProxy"></div>
+
+<div class="toolbar">
+    <button id="drawLineBtn">Draw Line</button>
+    <button id="deleteLineBtn">Delete</button>
+
+    <label>
+        Color
+        <input id="lineColor" type="color" value="#ff0000">
+    </label>
+
+    <label>
+        Thickness
+        <input id="lineWidth" type="range" min="2" max="20" value="6">
+    </label>
+
+    <label>
+        Grid
+        <select id="gridSizeSelect">
+            <option value="25">25 px</option>
+            <option value="50" selected>50 px</option>
+            <option value="100">100 px</option>
+        </select>
+    </label>
+
+    <label>
+        Snap Step
+        <select id="snapStepSelect">
+            <option value="1">Full (1.0x)</option>
+            <option value="0.5" selected>Half (0.5x)</option>
+            <option value="0.25">Quarter (0.25x)</option>
+            <option value="0.1">Fine (0.1x)</option>
+        </select>
+    </label>
+</div>
+
+<div class="app">
+    <div class="boards-container">
+        <div class="board-wrapper">
+            <div class="board-label">GROUND (1920x1080)</div>
+            <div id="groundBoard" class="board">
+                <svg class="lineLayer"></svg>
+                <div class="iconLayer"></div>
+            </div>
+        </div>
+
+        <div class="board-wrapper">
+            <div class="board-label">CEILING (1920x1080)</div>
+            <div id="ceilingBoard" class="board">
+                <svg class="lineLayer"></svg>
+                <div class="iconLayer"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="sidebar" class="sidebar"></div>
+</div>
+
+<script>
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+let gridDisplaySize = 50;
+let snapMultiplier = 0.5;
+
+const sidebar = document.getElementById("sidebar");
+const drawLineBtn = document.getElementById("drawLineBtn");
+const deleteLineBtn = document.getElementById("deleteLineBtn");
+const lineColor = document.getElementById("lineColor");
+const lineWidth = document.getElementById("lineWidth");
+const gridSizeSelect = document.getElementById("gridSizeSelect");
+const snapStepSelect = document.getElementById("snapStepSelect");
+const touchDragProxy = document.getElementById("touchDragProxy");
+
+const boards = document.querySelectorAll(".board");
+
+let drawMode = false;
+let selectedTile = null;
+let selectedLine = null;
+let drawingLine = false;
+let activeBoard = null;
+let previewLine = null;
+let draggedItemData = null;
+
+const itemNames = [
+    "Jammer", "Connector", "Stationary Connector", "Cube", 
+    "Fan", "RGB Converter", "Driller", "Inverter", 
+    "Clone", "Accumulator", "Swapper", "Teleporter", 
+    "Gravshifter", "Rover", "Activator", "Tetromino"
+];
+
+const itemColors = ["#e74c3c", "#3498db", "#2ecc71", "#f1c40f", "#9b59b6", "#e67e22", "#1abc9c", "#34495e"];
+
+function updateGridDisplay() {
+    gridDisplaySize = parseInt(gridSizeSelect.value, 10);
+    boards.forEach(board => {
+        board.style.backgroundSize = `${gridDisplaySize}px ${gridDisplaySize}px`;
+    });
+    document.querySelectorAll(".tile").forEach(tile => {
+        tile.style.width = gridDisplaySize + "px";
+        tile.style.height = gridDisplaySize + "px";
+    });
+}
+
+gridSizeSelect.addEventListener("change", updateGridDisplay);
+snapStepSelect.addEventListener("change", () => {
+    snapMultiplier = parseFloat(snapStepSelect.value);
+});
+
+function snap(value){
+    const step = gridDisplaySize * snapMultiplier;
+    return Math.round(value / step) * step;
+}
+
+function getPointerPos(event) {
+    if (event.touches && event.touches.length > 0) {
+        return { clientX: event.touches[0].clientX, clientY: event.touches[0].clientY };
+    }
+    if (event.changedTouches && event.changedTouches.length > 0) {
+        return { clientX: event.changedTouches[0].clientX, clientY: event.changedTouches[0].clientY };
+    }
+    return { clientX: event.clientX, clientY: event.clientY };
+}
+
+function boardPosition(boardEl, event){
+    const rect = boardEl.getBoundingClientRect();
+    const pos = getPointerPos(event);
+    return {
+        x: snap(pos.clientX - rect.left),
+        y: snap(pos.clientY - rect.top)
+    };
+}
+
+function deselectEverything(){
+    document.querySelectorAll(".tile").forEach(tile => tile.classList.remove("selected"));
+    if(selectedLine){
+        selectedLine.line.setAttribute("stroke", selectedLine.color);
+        selectedLine.line.setAttribute("stroke-width", selectedLine.width);
+        selectedLine.startHandle.style.display = "none";
+        selectedLine.endHandle.style.display = "none";
+    }
+    selectedTile = null;
+    selectedLine = null;
+}
+
+// Populate Sidebar using styled elements instead of external data-URIs
+itemNames.forEach((name, idx) => {
+    const bgColor = itemColors[idx % itemColors.length];
+
+    const iconDiv = document.createElement("div");
+    iconDiv.className = "palette-icon";
+    iconDiv.style.backgroundColor = bgColor;
+    iconDiv.innerText = name;
+    iconDiv.title = name;
+
+    const payload = { name, bgColor };
+
+    iconDiv.addEventListener("dragstart", e => {
+        e.dataTransfer.setData("text/plain", JSON.stringify(payload));
+    });
+
+    iconDiv.addEventListener("touchstart", e => {
+        draggedItemData = payload;
+        const pos = getPointerPos(e);
+        touchDragProxy.style.backgroundColor = bgColor;
+        touchDragProxy.innerText = name;
+        touchDragProxy.style.left = pos.clientX + "px";
+        touchDragProxy.style.top = pos.clientY + "px";
+        touchDragProxy.style.display = "flex";
+    }, { passive: true });
+
+    sidebar.appendChild(iconDiv);
+});
+
+document.addEventListener("touchmove", e => {
+    if (!draggedItemData) return;
+    const pos = getPointerPos(e);
+    touchDragProxy.style.left = pos.clientX + "px";
+    touchDragProxy.style.top = pos.clientY + "px";
+}, { passive: true });
+
+boards.forEach(board => {
+    board.addEventListener("dragover", e => e.preventDefault());
+    board.addEventListener("drop", e => {
+        e.preventDefault();
+        try {
+            const data = JSON.parse(e.dataTransfer.getData("text/plain"));
+            const p = boardPosition(board, e);
+            createTile(board, p.x, p.y, data.name, data.bgColor);
+        } catch(err) {}
+    });
+});
+
+document.addEventListener("touchend", e => {
+    if(!draggedItemData) return;
+    touchDragProxy.style.display = "none";
+    const pos = getPointerPos(e);
+
+    boards.forEach(board => {
+        const rect = board.getBoundingClientRect();
+        if (
+            pos.clientX >= rect.left && pos.clientX <= rect.right &&
+            pos.clientY >= rect.top && pos.clientY <= rect.bottom
+        ) {
+            const p = boardPosition(board, e);
+            createTile(board, p.x, p.y, draggedItemData.name, draggedItemData.bgColor);
+        }
+    });
+    draggedItemData = null;
+});
+
+function createTile(boardEl, x, y, name, bgColor){
+    const iconLayer = boardEl.querySelector(".iconLayer");
+    const tile = document.createElement("div");
+    tile.className = "tile";
+    tile.style.width = gridDisplaySize + "px";
+    tile.style.height = gridDisplaySize + "px";
+    tile.style.left = x + "px";
+    tile.style.top = y + "px";
+    tile.style.backgroundColor = bgColor;
+    tile.innerText = name;
+    tile.dataset.rotation = 0;
+    tile.dataset.scale = 1;
+
+    iconLayer.appendChild(tile);
+    enableTile(tile, boardEl);
+}
+
+function enableTile(tile, boardEl){
+    let dragging = false;
+    let offsetX = 0;
+    let offsetY = 0;
+    let initialPinchDist = 0;
+    let initialScale = 1;
+
+    tile.addEventListener("click", e => {
+        e.stopPropagation();
+        deselectEverything();
+        selectedTile = tile;
+        tile.classList.add("selected");
+    });
+
+    const startDrag = (e) => {
+        if(drawMode) return;
+
+        if (e.touches && e.touches.length === 2) {
+            initialPinchDist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            initialScale = parseFloat(tile.dataset.scale) || 1;
+            return;
+        }
+
+        dragging = true;
+        deselectEverything();
+        selectedTile = tile;
+        tile.classList.add("selected");
+
+        const pos = getPointerPos(e);
+        offsetX = pos.clientX - tile.offsetLeft;
+        offsetY = pos.clientY - tile.offsetTop;
+        e.stopPropagation();
+    };
+
+    tile.addEventListener("mousedown", startDrag);
+    tile.addEventListener("touchstart", startDrag, { passive: false });
+
+    const moveDrag = (e) => {
+        if (e.touches && e.touches.length === 2 && selectedTile === tile) {
+            if (e.cancelable) e.preventDefault();
+            const currentDist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            let scale = initialScale * (currentDist / initialPinchDist);
+            scale = Math.max(0.5, Math.min(3, scale));
+            tile.dataset.scale = scale;
+            updateTile(tile);
+            return;
+        }
+
+        if(!dragging) return;
+        if(e.cancelable) e.preventDefault();
+        const pos = getPointerPos(e);
+        tile.style.left = (pos.clientX - offsetX) + "px";
+        tile.style.top = (pos.clientY - offsetY) + "px";
+    };
+
+    document.addEventListener("mousemove", moveDrag);
+    document.addEventListener("touchmove", moveDrag, { passive: false });
+
+    const stopDrag = () => {
+        if(!dragging) return;
+        dragging = false;
+        tile.style.left = snap(parseInt(tile.style.left)) + "px";
+        tile.style.top = snap(parseInt(tile.style.top)) + "px";
+    };
+
+    document.addEventListener("mouseup", stopDrag);
+    document.addEventListener("touchend", stopDrag);
+
+    tile.addEventListener("wheel", e => {
+        if(tile !== selectedTile) return;
+        e.preventDefault();
+        let scale = parseFloat(tile.dataset.scale);
+        scale += e.deltaY > 0 ? -0.1 : 0.1;
+        scale = Math.max(0.5, Math.min(3, scale));
+        tile.dataset.scale = scale;
+        updateTile(tile);
+    });
+}
+
+function updateTile(tile){
+    tile.style.transform = `rotate(${tile.dataset.rotation}deg) scale(${tile.dataset.scale})`;
+}
+
+drawLineBtn.addEventListener("click", () => {
+    drawMode = !drawMode;
+    drawLineBtn.classList.toggle("active", drawMode);
+});
+
+boards.forEach(board => {
+    const lineLayer = board.querySelector(".lineLayer");
+    const iconLayer = board.querySelector(".iconLayer");
+
+    const handleLineStart = (e) => {
+        if(!drawMode) return;
+        if(e.target === iconLayer) return;
+
+        const p = boardPosition(board, e);
+        drawingLine = true;
+        activeBoard = board;
+
+        previewLine = document.createElementNS(SVG_NS, "line");
+        previewLine.setAttribute("x1", p.x);
+        previewLine.setAttribute("y1", p.y);
+        previewLine.setAttribute("x2", p.x);
+        previewLine.setAttribute("y2", p.y);
+        previewLine.setAttribute("stroke", lineColor.value);
+        previewLine.setAttribute("stroke-width", lineWidth.value);
+
+        lineLayer.appendChild(previewLine);
+    };
+
+    board.addEventListener("mousedown", handleLineStart);
+    board.addEventListener("touchstart", handleLineStart, { passive: false });
+});
+
+const handleLineMove = (e) => {
+    if(!drawingLine || !activeBoard) return;
+    if(e.cancelable) e.preventDefault();
+    const p = boardPosition(activeBoard, e);
+    previewLine.setAttribute("x2", p.x);
+    previewLine.setAttribute("y2", p.y);
+};
+
+document.addEventListener("mousemove", handleLineMove);
+document.addEventListener("touchmove", handleLineMove, { passive: false });
+
+const handleLineEnd = () => {
+    if(!drawingLine || !activeBoard) return;
+    drawingLine = false;
+
+    const x1 = Number(previewLine.getAttribute("x1"));
+    const y1 = Number(previewLine.getAttribute("y1"));
+    const x2 = Number(previewLine.getAttribute("x2"));
+    const y2 = Number(previewLine.getAttribute("y2"));
+
+    const lineLayer = activeBoard.querySelector(".lineLayer");
+    previewLine.remove();
+
+    if (x1 !== x2 || y1 !== y2) {
+        createLineGroup(activeBoard, lineLayer, x1, y1, x2, y2);
+    }
+    activeBoard = null;
+};
+
+document.addEventListener("mouseup", handleLineEnd);
+document.addEventListener("touchend", handleLineEnd);
+
+function createHandle(x, y){
+    const c = document.createElementNS(SVG_NS, "circle");
+    c.setAttribute("cx", x);
+    c.setAttribute("cy", y);
+    c.setAttribute("r", 18);
+    c.classList.add("line-handle");
+    return c;
+}
+
+function updateGroupPosition(obj, x1, y1, x2, y2){
+    [obj.hitbox, obj.line].forEach(item => {
+        item.setAttribute("x1", x1);
+        item.setAttribute("y1", y1);
+        item.setAttribute("x2", x2);
+        item.setAttribute("y2", y2);
+    });
+
+    obj.startHandle.setAttribute("cx", x1);
+    obj.startHandle.setAttribute("cy", y1);
+    obj.endHandle.setAttribute("cx", x2);
+    obj.endHandle.setAttribute("cy", y2);
+}
+
+function createLineGroup(boardEl, lineLayer, x1, y1, x2, y2){
+    const group = document.createElementNS(SVG_NS, "g");
+    const hitbox = document.createElementNS(SVG_NS, "line");
+    const line = document.createElementNS(SVG_NS, "line");
+
+    hitbox.setAttribute("stroke", "transparent");
+    hitbox.setAttribute("stroke-width", "36");
+    hitbox.setAttribute("cursor", "pointer");
+
+    line.setAttribute("stroke", lineColor.value);
+    line.setAttribute("stroke-width", lineWidth.value);
+    line.setAttribute("stroke-linecap", "round");
+
+    const startHandle = createHandle(x1, y1);
+    const endHandle = createHandle(x2, y2);
+
+    updateGroupPosition({ hitbox, line, startHandle, endHandle }, x1, y1, x2, y2);
+
+    group.appendChild(hitbox);
+    group.appendChild(line);
+    group.appendChild(startHandle);
+    group.appendChild(endHandle);
+
+    lineLayer.appendChild(group);
+
+    const obj = {
+        group, hitbox, line, startHandle, endHandle,
+        color: lineColor.value,
+        width: lineWidth.value,
+        boardEl
+    };
+
+    enableLineSelection(obj);
+    enableLineMove(obj);
+    enableHandleMove(obj);
+
+    return obj;
+}
+
+function selectLine(obj){
+    deselectEverything();
+    selectedLine = obj;
+
+    obj.line.setAttribute("stroke", "dodgerblue");
+    obj.line.setAttribute("stroke-width", Number(obj.width) + 2);
+    obj.startHandle.style.display = "block";
+    obj.endHandle.style.display = "block";
+}
+
+function enableLineSelection(obj){
+    obj.hitbox.addEventListener("click", e => {
+        e.stopPropagation();
+        selectLine(obj);
+    });
+}
+
+function enableLineMove(obj){
+    let dragging = false;
+    let startMouseX, startMouseY;
+    let x1, y1, x2, y2;
+
+    const startMove = (e) => {
+        if(drawMode) return;
+        selectLine(obj);
+        dragging = true;
+
+        const pos = getPointerPos(e);
+        startMouseX = pos.clientX;
+        startMouseY = pos.clientY;
+
+        x1 = Number(obj.line.getAttribute("x1"));
+        y1 = Number(obj.line.getAttribute("y1"));
+        x2 = Number(obj.line.getAttribute("x2"));
+        y2 = Number(obj.line.getAttribute("y2"));
+
+        e.stopPropagation();
+    };
+
+    obj.hitbox.addEventListener("mousedown", startMove);
+    obj.hitbox.addEventListener("touchstart", startMove, { passive: false });
+
+    const moveLine = (e) => {
+        if(!dragging) return;
+        if(e.cancelable) e.preventDefault();
+        const pos = getPointerPos(e);
+        const dx = pos.clientX - startMouseX;
+        const dy = pos.clientY - startMouseY;
+
+        updateGroupPosition(obj, x1 + dx, y1 + dy, x2 + dx, y2 + dy);
+    };
+
+    document.addEventListener("mousemove", moveLine);
+    document.addEventListener("touchmove", moveLine, { passive: false });
+
+    const endMove = () => {
+        if(!dragging) return;
+        dragging = false;
+
+        updateGroupPosition(
+            obj,
+            snap(Number(obj.line.getAttribute("x1"))),
+            snap(Number(obj.line.getAttribute("y1"))),
+            snap(Number(obj.line.getAttribute("x2"))),
+            snap(Number(obj.line.getAttribute("y2")))
+        );
+    };
+
+    document.addEventListener("mouseup", endMove);
+    document.addEventListener("touchend", endMove);
+}
+
+function enableHandleMove(obj){
+    createHandleDrag(obj, obj.startHandle, "start");
+    createHandleDrag(obj, obj.endHandle, "end");
+}
+
+function createHandleDrag(obj, handle, type){
+    const startHandleDrag = (e) => {
+        e.stopPropagation();
+
+        function move(ev){
+            if(ev.cancelable) ev.preventDefault();
+            const p = boardPosition(obj.boardEl, ev);
+            let x1 = Number(obj.line.getAttribute("x1"));
+            let y1 = Number(obj.line.getAttribute("y1"));
+            let x2 = Number(obj.line.getAttribute("x2"));
+            let y2 = Number(obj.line.getAttribute("y2"));
+
+            if(type === "start"){
+                x1 = p.x;
+                y1 = p.y;
+            } else {
+                x2 = p.x;
+                y2 = p.y;
+            }
+
+            updateGroupPosition(obj, x1, y1, x2, y2);
+        }
+
+        function up(){
+            document.removeEventListener("mousemove", move);
+            document.removeEventListener("touchmove", move);
+            document.removeEventListener("mouseup", up);
+            document.removeEventListener("touchend", up);
+        }
+
+        document.addEventListener("mousemove", move);
+        document.addEventListener("touchmove", move, { passive: false });
+        document.addEventListener("mouseup", up);
+        document.addEventListener("touchend", up);
+    };
+
+    handle.addEventListener("mousedown", startHandleDrag);
+    handle.addEventListener("touchstart", startHandleDrag, { passive: false });
+}
+
+// Delete action with safety against unwanted background clears
+deleteLineBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if(selectedTile){
+        selectedTile.remove();
+        selectedTile = null;
+    }
+    if(selectedLine){
+        selectedLine.group.remove();
+        selectedLine = null;
+    }
+});
+
+document.addEventListener("keydown", e => {
+    if(e.key === "Delete"){
+        if(selectedTile){
+            selectedTile.remove();
+            selectedTile = null;
+        }
+        if(selectedLine){
+            selectedLine.group.remove();
+            selectedLine = null;
+        }
+    }
+
+    if(e.key.toLowerCase() === "r" && selectedTile){
+        let rotation = Number(selectedTile.dataset.rotation);
+        rotation += 90;
+        selectedTile.dataset.rotation = rotation;
+        updateTile(selectedTile);
+    }
+});
+
+document.addEventListener("click", e => {
+    if(!drawMode && !e.target.closest(".board") && !e.target.closest(".toolbar") && !e.target.closest(".sidebar")){
+        deselectEverything();
+    }
+});
+
+updateGridDisplay();
+</script>
+
+</body>
+</html>

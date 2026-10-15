@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grid Map Editor</title>
+
+<style>
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: #222;
+    font-family: Arial, sans-serif;
+}
+
+.app {
+    display: flex;
+    height: 100vh;
+    padding: 16px;
+    gap: 16px;
+}
+
+/* CANVAS AREA */
+
+#board {
+    flex: 1;
+    position: relative;
+    background: white;
+    border: 2px solid #555;
+
+    background-image:
+        linear-gradient(#e5e5e5 1px, transparent 1px),
+        linear-gradient(90deg, #e5e5e5 1px, transparent 1px);
+
+    background-size: 50px 50px;
+
+    overflow: hidden;
+}
+
+/* SIDEBAR */
+
+.sidebar {
+    width: 180px;
+
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+
+.palette-icon {
+    width: 80px;
+    height: 80px;
+
+    background: gray;
+    border: 2px solid #333;
+
+    cursor: grab;
+}
+
+.palette-icon:active {
+    cursor: grabbing;
+}
+
+/* PLACED ICONS */
+
+.tile {
+    position: absolute;
+
+    width: 50px;
+    height: 50px;
+
+    background: gray;
+    border: 2px solid #333;
+
+    cursor: move;
+
+    transform-origin: center;
+}
+
+.tile.selected {
+    outline: 3px solid dodgerblue;
+    z-index: 1000;
+}
+
+</style>
+</head>
+<body>
+
+<div class="app">
+
+    <div id="board"></div>
+
+    <div class="sidebar">
+
+        <div class="palette-icon" draggable="true"></div>
+        <div class="palette-icon" draggable="true"></div>
+
+        <div class="palette-icon" draggable="true"></div>
+        <div class="palette-icon" draggable="true"></div>
+
+        <div class="palette-icon" draggable="true"></div>
+        <div class="palette-icon" draggable="true"></div>
+
+        <div class="palette-icon" draggable="true"></div>
+        <div class="palette-icon" draggable="true"></div>
+
+        <div class="palette-icon" draggable="true"></div>
+        <div class="palette-icon" draggable="true"></div>
+
+        <div class="palette-icon" draggable="true"></div>
+        <div class="palette-icon" draggable="true"></div>
+
+    </div>
+
+</div>
+
+<script>
+
+const board = document.getElementById("board");
+
+const GRID = 50;
+
+let selectedTile = null;
+
+/* ---------- DRAG FROM PALETTE ---------- */
+
+document.querySelectorAll(".palette-icon")
+.forEach(icon => {
+
+    icon.addEventListener("dragstart", e => {
+        e.dataTransfer.setData("newtile", "true");
+    });
+
+});
+
+/* ---------- DROP ON BOARD ---------- */
+
+board.addEventListener("dragover", e => {
+    e.preventDefault();
+});
+
+board.addEventListener("drop", e => {
+
+    e.preventDefault();
+
+    const x =
+        Math.floor(e.offsetX / GRID) * GRID;
+
+    const y =
+        Math.floor(e.offsetY / GRID) * GRID;
+
+    createTile(x, y);
+
+});
+
+/* ---------- CREATE TILE ---------- */
+
+function createTile(x, y) {
+
+    const tile = document.createElement("div");
+
+    tile.className = "tile";
+
+    tile.style.left = x + "px";
+    tile.style.top = y + "px";
+
+    tile.dataset.rotation = 0;
+    tile.dataset.scale = 1;
+
+    board.appendChild(tile);
+
+    attachTileEvents(tile);
+
+}
+
+/* ---------- TILE EVENTS ---------- */
+
+function attachTileEvents(tile) {
+
+    tile.addEventListener("click", e => {
+
+        e.stopPropagation();
+
+        document
+            .querySelectorAll(".tile")
+            .forEach(t => t.classList.remove("selected"));
+
+        tile.classList.add("selected");
+
+        selectedTile = tile;
+
+    });
+
+    let dragging = false;
+    let offsetX;
+    let offsetY;
+
+    tile.addEventListener("mousedown", e => {
+
+        dragging = true;
+
+        offsetX = e.clientX - tile.offsetLeft;
+        offsetY = e.clientY - tile.offsetTop;
+
+    });
+
+    document.addEventListener("mousemove", e => {
+
+        if (!dragging) return;
+
+        let x = e.clientX - offsetX;
+        let y = e.clientY - offsetY;
+
+        tile.style.left = x + "px";
+        tile.style.top = y + "px";
+
+    });
+
+    document.addEventListener("mouseup", () => {
+
+        if (!dragging) return;
+
+        dragging = false;
+
+        const x =
+            Math.round(parseInt(tile.style.left) / GRID)
+            * GRID;
+
+        const y =
+            Math.round(parseInt(tile.style.top) / GRID)
+            * GRID;
+
+        tile.style.left = x + "px";
+        tile.style.top = y + "px";
+
+    });
+
+    tile.addEventListener("wheel", e => {
+
+        e.preventDefault();
+
+        if (tile !== selectedTile) return;
+
+        let scale =
+            parseFloat(tile.dataset.scale);
+
+        scale += e.deltaY > 0 ? -0.1 : 0.1;
+
+        scale = Math.max(0.5, scale);
+        scale = Math.min(3, scale);
+
+        tile.dataset.scale = scale;
+
+        updateTransform(tile);
+
+    });
+
+}
+
+/* ---------- DESELECT ---------- */
+
+board.addEventListener("click", () => {
+
+    document
+        .querySelectorAll(".tile")
+        .forEach(t => t.classList.remove("selected"));
+
+    selectedTile = null;
+
+});
+
+/* ---------- KEYBOARD ---------- */
+
+document.addEventListener("keydown", e => {
+
+    if (!selectedTile) return;
+
+    if (e.key === "Delete") {
+
+        selectedTile.remove();
+        selectedTile = null;
+    }
+
+    if (e.key.toLowerCase() === "r") {
+
+        let rotation =
+            parseInt(selectedTile.dataset.rotation);
+
+        rotation += 90;
+
+        selectedTile.dataset.rotation = rotation;
+
+        updateTransform(selectedTile);
+    }
+
+});
+
+/* ---------- UPDATE TRANSFORM ---------- */
+
+function updateTransform(tile) {
+
+    const rotation =
+        tile.dataset.rotation;
+
+    const scale =
+        tile.dataset.scale;
+
+    tile.style.transform =
+        `rotate(${rotation}deg) scale(${scale})`;
+
+}
+
+</script>
+</body>
+</html>

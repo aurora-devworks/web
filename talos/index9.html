@@ -1,0 +1,1509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Map Editor</title>
+
+<!-- html2canvas and jsPDF for direct digital PDF rendering -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+
+*{
+    box-sizing:border-box;
+}
+
+body{
+    margin:0;
+    background:#222;
+    font-family:Arial,sans-serif;
+    overflow: hidden;
+    touch-action: none;
+}
+
+.toolbar{
+    min-height:60px;
+    background:#2c2c2c;
+    color:white;
+
+    display:flex;
+    align-items:center;
+    gap:12px;
+
+    padding:8px 16px;
+    flex-wrap: wrap;
+    z-index: 10;
+    border-bottom: 1px solid #444;
+}
+
+.tool-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.tool-group-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: #888;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    margin-right: 2px;
+}
+
+button{
+    padding:6px 12px;
+    cursor:pointer;
+    background: #3a3a3a;
+    color: white;
+    border: 1px solid #555;
+    border-radius: 4px;
+    font-weight: bold;
+    font-size: 13px;
+    transition: background 0.15s ease;
+}
+
+button:hover {
+    background: #4a4a4a;
+}
+
+button:active {
+    background: #555;
+}
+
+#drawLineBtn.active{
+    background:#28a745;
+    color:white;
+    border-color: #218838;
+}
+
+select, input[type="range"], input[type="color"] {
+    cursor: pointer;
+}
+
+input[type="color"] {
+    border: 1px solid #555;
+    border-radius: 4px;
+    height: 30px;
+    width: 36px;
+    padding: 2px;
+    background: #3a3a3a;
+}
+
+select {
+    background: #3a3a3a;
+    color: white;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 5px 8px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.separator {
+    width: 1px;
+    height: 32px;
+    background: #444;
+    margin: 0 4px;
+}
+
+.coord-display {
+    background: #111;
+    color: #0ff;
+    font-family: monospace;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 13px;
+    min-width: 120px;
+    text-align: center;
+    border: 1px solid #333;
+    margin-left: auto;
+}
+
+.control-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #ccc;
+    font-weight: bold;
+}
+
+.app{
+    display:flex;
+    height:calc(100vh - 60px);
+    padding:16px;
+    gap:16px;
+    position: relative;
+}
+
+.boards-container{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    gap:24px;
+    overflow:auto;
+    padding-right:10px;
+    cursor: default;
+    position: relative;
+}
+
+.board-wrapper{
+    display:flex;
+    flex-direction:column;
+    width:1920px;
+    height:1130px; /* 1080 + label space */
+    transform-origin: top left;
+    transition: transform 0.05s linear;
+}
+
+.board-label{
+    color:#fff;
+    font-size:18px;
+    font-weight:bold;
+    letter-spacing:1px;
+    margin-bottom:8px;
+    flex-shrink: 0;
+}
+
+.board{
+    width:1920px;
+    height:1080px;
+    position:relative;
+    overflow:hidden;
+
+    background:white;
+    border:2px solid #666;
+
+    background-image:
+        linear-gradient(#ddd 1px, transparent 1px),
+        linear-gradient(90deg,#ddd 1px,transparent 1px);
+
+    background-size:50px 50px;
+    flex-shrink: 0;
+}
+
+.lineLayer{
+    position:absolute;
+    inset:0;
+    z-index:1;
+    width:100%;
+    height:100%;
+}
+
+.iconLayer{
+    position:absolute;
+    inset:0;
+    z-index:2;
+    pointer-events: none;
+}
+
+.sidebar-container {
+    position: relative;
+    display: flex;
+    transition: transform 0.3s ease;
+}
+
+.sidebar{
+    width: 180px;
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:10px;
+    overflow-y:auto;
+    max-height: 100%;
+    transition: width 0.3s ease, opacity 0.3s ease;
+}
+
+.sidebar-container.collapsed .sidebar {
+    width: 0;
+    opacity: 0;
+    overflow: hidden;
+    gap: 0;
+}
+
+.sidebar-toggle-btn {
+    position: absolute;
+    left: -32px;
+    top: 10px;
+    width: 32px;
+    height: 40px;
+    background: #2c2c2c;
+    color: white;
+    border: 1px solid #555;
+    border-right: none;
+    border-radius: 6px 0 0 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: bold;
+    z-index: 20;
+    box-shadow: -2px 0 6px rgba(0,0,0,0.3);
+}
+
+.sidebar-toggle-btn:hover {
+    background: #3a3a3a;
+}
+
+.palette-icon{
+    width:75px;
+    height:75px;
+    background:#444;
+    background-size:contain;
+    background-position:center;
+    background-repeat:no-repeat;
+    border:2px solid #555;
+    cursor:grab;
+    user-select: none;
+    -webkit-user-drag: element;
+    border-radius: 6px;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.palette-icon.dragging {
+    opacity: 0.4;
+    transform: scale(0.9);
+}
+
+@keyframes dropPop {
+    0% {
+        transform: scale(0.2) rotate(-15deg);
+        opacity: 0;
+    }
+    60% {
+        transform: scale(1.15) rotate(5deg);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(1) rotate(0deg);
+        opacity: 1;
+    }
+}
+
+.tile{
+    position:absolute;
+
+    width:50px;
+    height:50px;
+
+    background-size:contain;
+    background-position:center;
+    background-repeat:no-repeat;
+
+    cursor:move;
+
+    transform-origin:center center;
+    pointer-events: auto;
+    animation: dropPop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.tile.selected{
+    outline:3px solid dodgerblue;
+}
+
+.line-handle{
+    fill:dodgerblue;
+    stroke:white;
+    stroke-width:2;
+    display:none;
+    cursor:pointer;
+}
+
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+
+    <!-- Group 1: File Actions -->
+    <div class="tool-group">
+        <button id="exportPdfBtn">Export PDF</button>
+        <button id="exportJsonBtn">Export JSON</button>
+        <button id="importJsonBtn">Import JSON</button>
+        <input type="file" id="importFileInput" accept=".json" style="display:none;">
+    </div>
+
+    <div class="separator"></div>
+
+    <!-- Group 2: History -->
+    <div class="tool-group">
+        <button id="undoBtn" title="Undo (Ctrl+Z)">Undo</button>
+        <button id="redoBtn" title="Redo (Ctrl+Y)">Redo</button>
+    </div>
+
+    <div class="separator"></div>
+
+    <!-- Group 3: Selection / Edit -->
+    <div class="tool-group">
+        <button id="duplicateBtn" title="Duplicate Selected (Ctrl+D)">Duplicate</button>
+        <button id="rotateBtn" title="Rotate Selected (R)">Rotate 90°</button>
+        <button id="scaleUpBtn">Scale +</button>
+        <button id="scaleDownBtn">Scale -</button>
+    </div>
+
+    <div class="separator"></div>
+
+    <!-- Group 4: Drawing & Deleting -->
+    <div class="tool-group">
+        <button id="drawLineBtn">Draw Line</button>
+        <button id="deleteBtn" style="background:#8b0000; border-color:#a00000;" title="Delete Selected (Del)">Delete</button>
+        <label class="control-label">
+            Color
+            <input id="lineColor" type="color" value="#ff0000">
+        </label>
+        <label class="control-label">
+            Width
+            <input id="lineWidth" type="range" min="1" max="12" value="3" style="width:70px;">
+        </label>
+    </div>
+
+    <div class="separator"></div>
+
+    <!-- Group 5: Grid & Snap Settings -->
+    <div class="tool-group">
+        <label class="control-label">
+            Grid
+            <select id="gridSizeSelect">
+                <option value="25">25 px</option>
+                <option value="50" selected>50 px</option>
+                <option value="100">100 px</option>
+            </select>
+        </label>
+
+        <label class="control-label">
+            Snap
+            <select id="snapStepSelect">
+                <option value="1">1.0x</option>
+                <option value="0.5" selected>0.5x</option>
+                <option value="0.25">0.25x</option>
+                <option value="0.1">Fine</option>
+            </select>
+        </label>
+    </div>
+
+    <!-- Coordinates Display -->
+    <div class="coord-display" id="coordDisplay">X: 0, Y: 0</div>
+
+</div>
+
+<div class="app">
+
+    <div class="boards-container" id="boardsContainer">
+
+        <div class="board-wrapper" id="groundWrapper">
+            <div class="board-label">GROUND (1920x1080)</div>
+            <div id="groundBoard" class="board" data-board-id="ground">
+                <svg class="lineLayer"></svg>
+                <div class="iconLayer"></div>
+            </div>
+        </div>
+
+        <div class="board-wrapper" id="ceilingWrapper">
+            <div class="board-label">CEILING (1920x1080)</div>
+            <div id="ceilingBoard" class="board" data-board-id="ceiling">
+                <svg class="lineLayer"></svg>
+                <div class="iconLayer"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <div id="sidebarContainer" class="sidebar-container">
+        <button id="sidebarToggleBtn" class="sidebar-toggle-btn" title="Toggle Sidebar">▶</button>
+        <div id="sidebar" class="sidebar"></div>
+    </div>
+
+</div>
+
+<script>
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+let gridDisplaySize = 50;
+let snapMultiplier = 0.5;
+let zoomLevel = 1.0;
+
+const sidebar = document.getElementById("sidebar");
+const sidebarContainer = document.getElementById("sidebarContainer");
+const sidebarToggleBtn = document.getElementById("sidebarToggleBtn");
+const boardsContainer = document.getElementById("boardsContainer");
+
+const drawLineBtn = document.getElementById("drawLineBtn");
+const deleteBtn = document.getElementById("deleteBtn");
+const duplicateBtn = document.getElementById("duplicateBtn");
+const lineColor = document.getElementById("lineColor");
+const lineWidth = document.getElementById("lineWidth");
+const gridSizeSelect = document.getElementById("gridSizeSelect");
+const snapStepSelect = document.getElementById("snapStepSelect");
+const coordDisplay = document.getElementById("coordDisplay");
+
+const undoBtn = document.getElementById("undoBtn");
+const redoBtn = document.getElementById("redoBtn");
+const exportPdfBtn = document.getElementById("exportPdfBtn");
+const exportJsonBtn = document.getElementById("exportJsonBtn");
+const importJsonBtn = document.getElementById("importJsonBtn");
+const importFileInput = document.getElementById("importFileInput");
+const rotateBtn = document.getElementById("rotateBtn");
+const scaleUpBtn = document.getElementById("scaleUpBtn");
+const scaleDownBtn = document.getElementById("scaleDownBtn");
+
+const boards = document.querySelectorAll(".board");
+
+let drawMode = false;
+
+// Selection state
+let selectedTiles = [];
+let selectedLines = [];
+
+let drawingLine = false;
+let activeBoard = null;
+let previewLine = null;
+
+let draggedIconSrc = null;
+
+// Pan & Pinch state
+let isPanning = false;
+let panStartX = 0;
+let panStartY = 0;
+let scrollStartX = 0;
+let scrollStartY = 0;
+
+let initialPinchDistance = null;
+let initialZoom = 1.0;
+
+// Undo / Redo History Stack
+let historyStack = [];
+let historyIndex = -1;
+let isRestoringState = false;
+
+// Line Objects registry
+let lineObjects = [];
+
+// Items list
+const itemNames = [
+    "Jammer",               // 01
+    "Connector",            // 02
+    "Stationary Connector", // 03
+    "Cube",                 // 04
+    "Fan",                  // 05
+    "RGB Converter",        // 06
+    "Driller",              // 07
+    "Inverter",             // 08
+    "Clone",                // 09
+    "Accumulator",          // 10
+    "Swapper",              // 11
+    "Teleporter",           // 12
+    "Gravshifter",          // 13
+    "Rover",                // 14
+    "Activator",            // 15
+    "Tetromino"             // 16
+];
+
+/* ==========================
+   ZOOM & PANNING (DRAG & PINCH)
+========================== */
+
+function updateZoomTransform() {
+    const wrappers = document.querySelectorAll(".board-wrapper");
+    wrappers.forEach(wrapper => {
+        wrapper.style.transform = `scale(${zoomLevel})`;
+        wrapper.style.width = `${1920 * zoomLevel}px`;
+        wrapper.style.height = `${(1080 + 50) * zoomLevel}px`;
+    });
+}
+
+boardsContainer.addEventListener("mousedown", (e) => {
+    if (drawMode) return;
+    if (e.target.closest(".tile") || e.target.closest("line") || e.target.closest(".line-handle") || e.target.closest("button") || e.target.closest("input") || e.target.closest("select")) return;
+    
+    isPanning = true;
+    panStartX = e.clientX;
+    panStartY = e.clientY;
+    scrollStartX = boardsContainer.scrollLeft;
+    scrollStartY = boardsContainer.scrollTop;
+    boardsContainer.style.cursor = "grabbing";
+});
+
+document.addEventListener("mousemove", (e) => {
+    if (!isPanning) return;
+    const dx = e.clientX - panStartX;
+    const dy = e.clientY - panStartY;
+    boardsContainer.scrollLeft = scrollStartX - dx;
+    boardsContainer.scrollTop = scrollStartY - dy;
+});
+
+document.addEventListener("mouseup", () => {
+    if (isPanning) {
+        isPanning = false;
+        boardsContainer.style.cursor = "default";
+    }
+});
+
+// Pinch-to-zoom and Touch Panning
+boardsContainer.addEventListener("touchstart", (e) => {
+    if (e.touches.length === 2) {
+        initialPinchDistance = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+        );
+        initialZoom = zoomLevel;
+    }
+}, { passive: true });
+
+boardsContainer.addEventListener("touchmove", (e) => {
+    if (e.touches.length === 2 && initialPinchDistance !== null) {
+        const currentDistance = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+        );
+        const factor = currentDistance / initialPinchDistance;
+        zoomLevel = Math.max(0.2, Math.min(3.0, initialZoom * factor));
+        updateZoomTransform();
+    }
+}, { passive: true });
+
+boardsContainer.addEventListener("touchend", (e) => {
+    if (e.touches.length < 2) {
+        initialPinchDistance = null;
+    }
+});
+
+// Mouse wheel zoom
+boardsContainer.addEventListener("wheel", (e) => {
+    if (e.ctrlKey) {
+        e.preventDefault();
+        const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+        zoomLevel = Math.max(0.2, Math.min(3.0, zoomLevel * zoomFactor));
+        updateZoomTransform();
+    }
+}, { passive: false });
+
+/* ==========================
+   SIDEBAR TOGGLE
+========================== */
+
+sidebarToggleBtn.addEventListener("click", () => {
+    sidebarContainer.classList.toggle("collapsed");
+    sidebarToggleBtn.innerText = sidebarContainer.classList.contains("collapsed") ? "◀" : "▶";
+});
+
+/* ==========================
+   EXPORT PDF (DIRECT DIGITAL RENDER)
+========================== */
+
+exportPdfBtn.addEventListener("click", async () => {
+    deselectEverything();
+
+    const originalBtnText = exportPdfBtn.innerText;
+    exportPdfBtn.innerText = "Generating PDF...";
+    exportPdfBtn.disabled = true;
+
+    try {
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({
+            orientation: "landscape",
+            unit: "px",
+            format: [1920, 1080]
+        });
+
+        const groundWrapper = document.getElementById("groundBoard").parentElement;
+        const ceilingWrapper = document.getElementById("ceilingBoard").parentElement;
+
+        const groundCanvas = await html2canvas(groundWrapper, { scale: 1 });
+        const groundImg = groundCanvas.toDataURL("image/jpeg", 0.95);
+
+        pdf.addImage(groundImg, "JPEG", 0, 0, 1920, 1080);
+        pdf.addPage([1920, 1080], "landscape");
+
+        const ceilingCanvas = await html2canvas(ceilingWrapper, { scale: 1 });
+        const ceilingImg = ceilingCanvas.toDataURL("image/jpeg", 0.95);
+
+        pdf.addImage(ceilingImg, "JPEG", 0, 0, 1920, 1080);
+
+        pdf.save("map_layout.pdf");
+    } catch (error) {
+        alert("Error generating PDF: " + error.message);
+    } finally {
+        exportPdfBtn.innerText = originalBtnText;
+        exportPdfBtn.disabled = false;
+    }
+});
+
+/* ==========================
+   UNDO / REDO HISTORY
+========================== */
+
+function saveState() {
+    if (isRestoringState) return;
+
+    const state = serializeMap();
+
+    if (historyIndex < historyStack.length - 1) {
+        historyStack = historyStack.slice(0, historyIndex + 1);
+    }
+
+    historyStack.push(state);
+    historyIndex = historyStack.length - 1;
+
+    if (historyStack.length > 50) {
+        historyStack.shift();
+        historyIndex--;
+    }
+}
+
+function undo() {
+    if (historyIndex > 0) {
+        historyIndex--;
+        restoreState(historyStack[historyIndex]);
+    }
+}
+
+function redo() {
+    if (historyIndex < historyStack.length - 1) {
+        historyIndex++;
+        restoreState(historyStack[historyIndex]);
+    }
+}
+
+function restoreState(jsonString) {
+    isRestoringState = true;
+    deserializeMap(jsonString);
+    isRestoringState = false;
+}
+
+undoBtn.addEventListener("click", undo);
+redoBtn.addEventListener("click", redo);
+
+/* ==========================
+   EXPORT & IMPORT JSON
+========================== */
+
+function serializeMap() {
+    const data = {
+        gridSize: gridDisplaySize,
+        snapStep: snapMultiplier,
+        tiles: [],
+        lines: []
+    };
+
+    document.querySelectorAll(".tile").forEach(tile => {
+        const board = tile.closest(".board");
+        data.tiles.push({
+            boardId: board.dataset.boardId,
+            x: parseFloat(tile.style.left),
+            y: parseFloat(tile.style.top),
+            src: tile.dataset.src,
+            rotation: parseFloat(tile.dataset.rotation || 0),
+            scale: parseFloat(tile.dataset.scale || 1)
+        });
+    });
+
+    lineObjects.forEach(obj => {
+        if (!obj.group.parentNode) return;
+        data.lines.push({
+            boardId: obj.boardEl.dataset.boardId,
+            x1: Number(obj.line.getAttribute("x1")),
+            y1: Number(obj.line.getAttribute("y1")),
+            x2: Number(obj.line.getAttribute("x2")),
+            y2: Number(obj.line.getAttribute("y2")),
+            color: obj.color,
+            width: obj.width
+        });
+    });
+
+    return JSON.stringify(data, null, 2);
+}
+
+function deserializeMap(jsonString) {
+    try {
+        const data = JSON.parse(jsonString);
+
+        boards.forEach(board => {
+            board.querySelector(".iconLayer").innerHTML = "";
+            board.querySelector(".lineLayer").innerHTML = "";
+        });
+        lineObjects = [];
+        deselectEverything();
+
+        if (data.gridSize) {
+            gridSizeSelect.value = data.gridSize;
+            updateGridDisplay();
+        }
+        if (data.snapStep) {
+            snapStepSelect.value = data.snapStep;
+            snapMultiplier = parseFloat(data.snapStep);
+        }
+
+        if (data.tiles) {
+            data.tiles.forEach(t => {
+                const board = document.querySelector(`.board[data-board-id="${t.boardId}"]`);
+                if (board) {
+                    createTile(board, t.x, t.y, t.src, t.rotation, t.scale, false);
+                }
+            });
+        }
+
+        if (data.lines) {
+            data.lines.forEach(l => {
+                const board = document.querySelector(`.board[data-board-id="${l.boardId}"]`);
+                if (board) {
+                    const lineLayer = board.querySelector(".lineLayer");
+                    createLineGroup(board, lineLayer, l.x1, l.y1, l.x2, l.y2, l.color, l.width);
+                }
+            });
+        }
+    } catch (err) {
+        alert("Failed to import map JSON: " + err.message);
+    }
+}
+
+exportJsonBtn.addEventListener("click", () => {
+    const jsonStr = serializeMap();
+    const blob = new Blob([jsonStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "map_layout.json";
+    a.click();
+    URL.revokeObjectURL(url);
+});
+
+importJsonBtn.addEventListener("click", () => {
+    importFileInput.click();
+});
+
+importFileInput.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+        restoreState(evt.target.result);
+        saveState();
+    };
+    reader.readAsText(file);
+    importFileInput.value = "";
+});
+
+/* ==========================
+   GRID & SNAP CONTROLS
+========================== */
+
+function updateGridDisplay() {
+    gridDisplaySize = parseInt(gridSizeSelect.value, 10);
+    
+    boards.forEach(board => {
+        board.style.backgroundSize = `${gridDisplaySize}px ${gridDisplaySize}px`;
+    });
+
+    document.querySelectorAll(".tile").forEach(tile => {
+        tile.style.width = gridDisplaySize + "px";
+        tile.style.height = gridDisplaySize + "px";
+    });
+}
+
+gridSizeSelect.addEventListener("change", () => {
+    updateGridDisplay();
+    saveState();
+});
+
+snapStepSelect.addEventListener("change", () => {
+    snapMultiplier = parseFloat(snapStepSelect.value);
+    saveState();
+});
+
+function snap(value){
+    const step = gridDisplaySize * snapMultiplier;
+    return Math.round(value / step) * step;
+}
+
+function generateIconUri(index, name) {
+    const colors = ["#e74c3c", "#3498db", "#2ecc71", "#f1c40f", "#9b59b6", "#e67e22", "#1abc9c", "#34495e"];
+    const bg = colors[(index - 1) % colors.length];
+    
+    const words = name.split(" ");
+    let textSvg = "";
+    if (words.length > 1) {
+        textSvg = `<text x="50%" y="38%" dominant-baseline="middle" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="bold" font-family="sans-serif">${words[0]}</text>
+                   <text x="50%" y="62%" dominant-baseline="middle" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="bold" font-family="sans-serif">${words[1]}</text>`;
+    } else {
+        textSvg = `<text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#ffffff" font-size="13" font-weight="bold" font-family="sans-serif">${name}</text>`;
+    }
+
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80">
+        <rect width="80" height="80" rx="10" fill="${bg}"/>
+        ${textSvg}
+    </svg>`;
+    
+    return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+}
+
+function getPointerPos(event) {
+    if (event.touches && event.touches.length > 0) {
+        return { clientX: event.touches[0].clientX, clientY: event.touches[0].clientY };
+    }
+    if (event.changedTouches && event.changedTouches.length > 0) {
+        return { clientX: event.changedTouches[0].clientX, clientY: event.changedTouches[0].clientY };
+    }
+    return { clientX: event.clientX, clientY: event.clientY };
+}
+
+function boardPosition(boardEl, event, doSnap = true){
+    const rect = boardEl.getBoundingClientRect();
+    const pos = getPointerPos(event);
+    const rawX = (pos.clientX - rect.left) / zoomLevel;
+    const rawY = (pos.clientY - rect.top) / zoomLevel;
+    
+    return {
+        x: doSnap ? snap(rawX) : rawX,
+        y: doSnap ? snap(rawY) : rawY
+    };
+}
+
+boards.forEach(board => {
+    const updateCoords = (e) => {
+        const p = boardPosition(board, e, true);
+        coordDisplay.innerText = `X: ${p.x}, Y: ${p.y}`;
+    };
+    board.addEventListener("mousemove", updateCoords);
+    board.addEventListener("touchmove", updateCoords);
+});
+
+/* ==========================
+   DESELECT & SELECT
+========================== */
+
+function deselectEverything(){
+    document.querySelectorAll(".tile").forEach(tile=>{
+        tile.classList.remove("selected");
+    });
+
+    lineObjects.forEach(obj => {
+        obj.line.setAttribute("stroke", obj.color);
+        obj.line.setAttribute("stroke-width", obj.width);
+        obj.startHandle.style.display = "none";
+        obj.endHandle.style.display = "none";
+    });
+
+    selectedTiles = [];
+    selectedLines = [];
+}
+
+function selectTile(tile, multi = false) {
+    if (!multi) {
+        deselectEverything();
+    }
+    if (!selectedTiles.includes(tile)) {
+        selectedTiles.push(tile);
+        tile.classList.add("selected");
+    }
+}
+
+function selectLine(obj, multi = false) {
+    if (!multi) {
+        deselectEverything();
+    }
+    if (!selectedLines.includes(obj)) {
+        selectedLines.push(obj);
+        obj.line.setAttribute("stroke", "dodgerblue");
+        obj.line.setAttribute("stroke-width", Number(obj.width) + 2);
+        obj.startHandle.style.display = "block";
+        obj.endHandle.style.display = "block";
+    }
+}
+
+/* ==========================
+   DUPLICATE, ROTATION & SCALING
+========================== */
+
+function duplicateSelected() {
+    if (selectedTiles.length === 0 && selectedLines.length === 0) return;
+
+    const offset = gridDisplaySize * snapMultiplier;
+    const newTiles = [];
+    const newLines = [];
+
+    selectedTiles.forEach(tile => {
+        const board = tile.closest(".board");
+        const x = parseFloat(tile.style.left) + offset;
+        const y = parseFloat(tile.style.top) + offset;
+        const src = tile.dataset.src;
+        const rotation = parseFloat(tile.dataset.rotation || 0);
+        const scale = parseFloat(tile.dataset.scale || 1);
+
+        const newTile = createTile(board, x, y, src, rotation, scale, true);
+        newTiles.push(newTile);
+    });
+
+    selectedLines.forEach(obj => {
+        const x1 = Number(obj.line.getAttribute("x1")) + offset;
+        const y1 = Number(obj.line.getAttribute("y1")) + offset;
+        const x2 = Number(obj.line.getAttribute("x2")) + offset;
+        const y2 = Number(obj.line.getAttribute("y2")) + offset;
+
+        const lineLayer = obj.boardEl.querySelector(".lineLayer");
+        const newObj = createLineGroup(obj.boardEl, lineLayer, x1, y1, x2, y2, obj.color, obj.width);
+        newLines.push(newObj);
+    });
+
+    deselectEverything();
+
+    newTiles.forEach(t => selectTile(t, true));
+    newLines.forEach(l => selectLine(l, true));
+
+    saveState();
+}
+
+duplicateBtn.addEventListener("click", duplicateSelected);
+
+function rotateSelected(angle = 90) {
+    if (selectedTiles.length === 0) return;
+
+    selectedTiles.forEach(tile => {
+        let rotation = Number(tile.dataset.rotation || 0);
+        rotation = (rotation + angle) % 360;
+        tile.dataset.rotation = rotation;
+        updateTile(tile);
+    });
+
+    saveState();
+}
+
+function scaleSelected(delta) {
+    if (selectedTiles.length === 0) return;
+
+    selectedTiles.forEach(tile => {
+        let scale = parseFloat(tile.dataset.scale || 1);
+        scale = Math.max(0.2, Math.min(4, scale + delta));
+        tile.dataset.scale = scale;
+        updateTile(tile);
+    });
+
+    saveState();
+}
+
+rotateBtn.addEventListener("click", () => rotateSelected(90));
+scaleUpBtn.addEventListener("click", () => scaleSelected(0.1));
+scaleDownBtn.addEventListener("click", () => scaleSelected(-0.1));
+
+/* ==========================
+   ICONS / PALETTE
+========================== */
+
+itemNames.forEach((name, idx) => {
+    const iconSrc = generateIconUri(idx + 1, name);
+
+    const iconDiv = document.createElement("div");
+    iconDiv.className = "palette-icon";
+    iconDiv.draggable = true;
+    iconDiv.style.backgroundImage = `url("${iconSrc}")`;
+    iconDiv.title = name;
+
+    iconDiv.addEventListener("dragstart", e => {
+        e.dataTransfer.setData("iconSrc", iconSrc);
+        iconDiv.classList.add("dragging");
+    });
+
+    iconDiv.addEventListener("dragend", () => {
+        iconDiv.classList.remove("dragging");
+    });
+
+    iconDiv.addEventListener("touchstart", e => {
+        draggedIconSrc = iconSrc;
+        iconDiv.classList.add("dragging");
+    }, { passive: true });
+
+    sidebar.appendChild(iconDiv);
+});
+
+boards.forEach(board => {
+    board.addEventListener("dragover", e => e.preventDefault());
+
+    board.addEventListener("drop", e => {
+        e.preventDefault();
+        const iconSrc = e.dataTransfer.getData("iconSrc");
+        if(!iconSrc) return;
+
+        const p = boardPosition(board, e);
+        const tile = createTile(board, p.x, p.y, iconSrc, 0, 1, true);
+        selectTile(tile);
+        saveState();
+    });
+});
+
+document.addEventListener("touchend", e => {
+    if(!draggedIconSrc) return;
+    
+    const pos = getPointerPos(e);
+
+    boards.forEach(board => {
+        const rect = board.getBoundingClientRect();
+
+        if (
+            pos.clientX >= rect.left &&
+            pos.clientX <= rect.right &&
+            pos.clientY >= rect.top &&
+            pos.clientY <= rect.bottom
+        ) {
+            const p = boardPosition(board, e);
+            const tile = createTile(board, p.x, p.y, draggedIconSrc, 0, 1, true);
+            selectTile(tile);
+            saveState();
+        }
+    });
+    draggedIconSrc = null;
+    document.querySelectorAll(".palette-icon").forEach(el => el.classList.remove("dragging"));
+});
+
+function createTile(boardEl, x, y, src, rotation = 0, scale = 1, animate = true){
+    const iconLayer = boardEl.querySelector(".iconLayer");
+    const tile = document.createElement("div");
+    tile.className = "tile";
+    if (!animate) {
+        tile.style.animation = "none";
+    }
+    
+    tile.style.width = gridDisplaySize + "px";
+    tile.style.height = gridDisplaySize + "px";
+    
+    tile.style.left = x + "px";
+    tile.style.top = y + "px";
+    tile.style.backgroundImage = `url("${src}")`;
+    tile.dataset.src = src;
+    tile.dataset.rotation = rotation;
+    tile.dataset.scale = scale;
+
+    updateTile(tile);
+
+    iconLayer.appendChild(tile);
+    enableTile(tile, boardEl);
+    return tile;
+}
+
+function enableTile(tile, boardEl){
+
+    let dragging = false;
+    let startPositions = [];
+
+    tile.addEventListener("click", e => {
+        e.stopPropagation();
+        if (!e.shiftKey && !selectedTiles.includes(tile)) {
+            deselectEverything();
+        }
+        selectTile(tile, e.shiftKey || selectedTiles.length > 1);
+    });
+
+    const startDrag = (e) => {
+        if(drawMode) return;
+        dragging = true;
+
+        if (!selectedTiles.includes(tile)) {
+            if (!e.shiftKey) deselectEverything();
+            selectTile(tile, e.shiftKey);
+        }
+
+        const pos = getPointerPos(e);
+        
+        startPositions = selectedTiles.map(t => ({
+            tile: t,
+            left: parseFloat(t.style.left),
+            top: parseFloat(t.style.top)
+        }));
+
+        startPosMouse = { x: pos.clientX, y: pos.clientY };
+        e.stopPropagation();
+    };
+
+    tile.addEventListener("mousedown", startDrag);
+    tile.addEventListener("touchstart", startDrag, { passive: false });
+
+    const moveDrag = (e) => {
+        if(!dragging) return;
+        if(e.cancelable) e.preventDefault();
+        const pos = getPointerPos(e);
+        const dx = (pos.clientX - startPosMouse.x) / zoomLevel;
+        const dy = (pos.clientY - startPosMouse.y) / zoomLevel;
+
+        startPositions.forEach(item => {
+            item.tile.style.left = (item.left + dx) + "px";
+            item.tile.style.top = (item.top + dy) + "px";
+        });
+    };
+
+    document.addEventListener("mousemove", moveDrag);
+    document.addEventListener("touchmove", moveDrag, { passive: false });
+
+    const stopDrag = () => {
+        if(!dragging) return;
+        dragging = false;
+
+        startPositions.forEach(item => {
+            item.tile.style.left = snap(parseInt(item.tile.style.left)) + "px";
+            item.tile.style.top = snap(parseInt(item.tile.style.top)) + "px";
+        });
+
+        saveState();
+    };
+
+    document.addEventListener("mouseup", stopDrag);
+    document.addEventListener("touchend", stopDrag);
+
+    tile.addEventListener("wheel", e => {
+        if(!selectedTiles.includes(tile)) return;
+        e.preventDefault();
+        let scale = parseFloat(tile.dataset.scale || 1);
+        scale += e.deltaY > 0 ? -0.1 : 0.1;
+        scale = Math.max(0.2, Math.min(4, scale));
+        tile.dataset.scale = scale;
+        updateTile(tile);
+        saveState();
+    });
+}
+
+function updateTile(tile){
+    tile.style.transform = `rotate(${tile.dataset.rotation || 0}deg) scale(${tile.dataset.scale || 1})`;
+}
+
+/* ==========================
+   DRAW LINE MODE
+========================== */
+
+drawLineBtn.addEventListener("click", () => {
+    drawMode = !drawMode;
+    drawLineBtn.classList.toggle("active", drawMode);
+});
+
+boards.forEach(board => {
+    const lineLayer = board.querySelector(".lineLayer");
+    const iconLayer = board.querySelector(".iconLayer");
+
+    const handleLineStart = (e) => {
+        if(!drawMode) return;
+        if(e.target === iconLayer) return;
+
+        const p = boardPosition(board, e);
+        drawingLine = true;
+        activeBoard = board;
+
+        previewLine = document.createElementNS(SVG_NS, "line");
+        previewLine.setAttribute("x1", p.x);
+        previewLine.setAttribute("y1", p.y);
+        previewLine.setAttribute("x2", p.x);
+        previewLine.setAttribute("y2", p.y);
+        previewLine.setAttribute("stroke", lineColor.value);
+        previewLine.setAttribute("stroke-width", lineWidth.value);
+
+        lineLayer.appendChild(previewLine);
+    };
+
+    board.addEventListener("mousedown", handleLineStart);
+    board.addEventListener("touchstart", handleLineStart, { passive: false });
+});
+
+const handleLineMove = (e) => {
+    if(!drawingLine || !activeBoard) return;
+    if(e.cancelable) e.preventDefault();
+    const p = boardPosition(activeBoard, e);
+    previewLine.setAttribute("x2", p.x);
+    previewLine.setAttribute("y2", p.y);
+};
+
+document.addEventListener("mousemove", handleLineMove);
+document.addEventListener("touchmove", handleLineMove, { passive: false });
+
+const handleLineEnd = () => {
+    if(!drawingLine || !activeBoard) return;
+    drawingLine = false;
+
+    const x1 = Number(previewLine.getAttribute("x1"));
+    const y1 = Number(previewLine.getAttribute("y1"));
+    const x2 = Number(previewLine.getAttribute("x2"));
+    const y2 = Number(previewLine.getAttribute("y2"));
+
+    const lineLayer = activeBoard.querySelector(".lineLayer");
+    previewLine.remove();
+
+    if (x1 !== x2 || y1 !== y2) {
+        const obj = createLineGroup(activeBoard, lineLayer, x1, y1, x2, y2, lineColor.value, lineWidth.value);
+        selectLine(obj);
+        saveState();
+    }
+    activeBoard = null;
+};
+
+document.addEventListener("mouseup", handleLineEnd);
+document.addEventListener("touchend", handleLineEnd);
+
+/* ==========================
+   LINE GROUPS
+========================== */
+
+function createHandle(x, y){
+    const c = document.createElementNS(SVG_NS, "circle");
+    c.setAttribute("cx", x);
+    c.setAttribute("cy", y);
+    c.setAttribute("r", 12);
+    c.classList.add("line-handle");
+    return c;
+}
+
+function updateGroupPosition(obj, x1, y1, x2, y2){
+    [obj.hitbox, obj.line].forEach(item => {
+        item.setAttribute("x1", x1);
+        item.setAttribute("y1", y1);
+        item.setAttribute("x2", x2);
+        item.setAttribute("y2", y2);
+    });
+
+    obj.startHandle.setAttribute("cx", x1);
+    obj.startHandle.setAttribute("cy", y1);
+    obj.endHandle.setAttribute("cx", x2);
+    obj.endHandle.setAttribute("cy", y2);
+}
+
+function createLineGroup(boardEl, lineLayer, x1, y1, x2, y2, color, width){
+    const group = document.createElementNS(SVG_NS, "g");
+    const hitbox = document.createElementNS(SVG_NS, "line");
+    const line = document.createElementNS(SVG_NS, "line");
+
+    hitbox.setAttribute("stroke", "transparent");
+    hitbox.setAttribute("stroke-width", "24");
+    hitbox.setAttribute("cursor", "pointer");
+
+    line.setAttribute("stroke", color);
+    line.setAttribute("stroke-width", width);
+    line.setAttribute("stroke-linecap", "round");
+
+    const startHandle = createHandle(x1, y1);
+    const endHandle = createHandle(x2, y2);
+
+    updateGroupPosition({ hitbox, line, startHandle, endHandle }, x1, y1, x2, y2);
+
+    group.appendChild(hitbox);
+    group.appendChild(line);
+    group.appendChild(startHandle);
+    group.appendChild(endHandle);
+
+    lineLayer.appendChild(group);
+
+    const obj = {
+        group,
+        hitbox,
+        line,
+        startHandle,
+        endHandle,
+        color,
+        width,
+        boardEl
+    };
+
+    lineObjects.push(obj);
+
+    enableLineSelection(obj);
+    enableLineMove(obj);
+    enableHandleMove(obj);
+
+    return obj;
+}
+
+/* ==========================
+   LINE SELECT
+========================== */
+
+function enableLineSelection(obj){
+    obj.hitbox.addEventListener("click", e => {
+        e.stopPropagation();
+        if (!e.shiftKey && !selectedLines.includes(obj)) {
+            deselectEverything();
+        }
+        selectLine(obj, e.shiftKey || selectedLines.length > 1);
+    });
+}
+
+/* ==========================
+   MOVE WHOLE LINE
+========================== */
+
+function enableLineMove(obj){
+    let dragging = false;
+    let startMouseX, startMouseY;
+    let lineStarts = [];
+
+    const startMove = (e) => {
+        if(drawMode) return;
+        if (!selectedLines.includes(obj)) {
+            if (!e.shiftKey) deselectEverything();
+            selectLine(obj, e.shiftKey);
+        }
+        dragging = true;
+
+        const pos = getPointerPos(e);
+        startMouseX = pos.clientX;
+        startMouseY = pos.clientY;
+
+        lineStarts = selectedLines.map(lineObj => ({
+            obj: lineObj,
+            x1: Number(lineObj.line.getAttribute("x1")),
+            y1: Number(lineObj.line.getAttribute("y1")),
+            x2: Number(lineObj.line.getAttribute("x2")),
+            y2: Number(lineObj.line.getAttribute("y2"))
+        }));
+
+        e.stopPropagation();
+    };
+
+    obj.hitbox.addEventListener("mousedown", startMove);
+    obj.hitbox.addEventListener("touchstart", startMove, { passive: false });
+
+    const moveLine = (e) => {
+        if(!dragging) return;
+        if(e.cancelable) e.preventDefault();
+        const pos = getPointerPos(e);
+        const dx = (pos.clientX - startMouseX) / zoomLevel;
+        const dy = (pos.clientY - startMouseY) / zoomLevel;
+
+        lineStarts.forEach(item => {
+            updateGroupPosition(item.obj, item.x1 + dx, item.y1 + dy, item.x2 + dx, item.y2 + dy);
+        });
+    };
+
+    document.addEventListener("mousemove", moveLine);
+    document.addEventListener("touchmove", moveLine, { passive: false });
+
+    const endMove = () => {
+        if(!dragging) return;
+        dragging = false;
+
+        lineStarts.forEach(item => {
+            updateGroupPosition(
+                item.obj,
+                snap(Number(item.obj.line.getAttribute("x1"))),
+                snap(Number(item.obj.line.getAttribute("y1"))),
+                snap(Number(item.obj.line.getAttribute("x2"))),
+                snap(Number(item.obj.line.getAttribute("y2")))
+            );
+        });
+
+        saveState();
+    };
+
+    document.addEventListener("mouseup", endMove);
+    document.addEventListener("touchend", endMove);
+}
+
+/* ==========================
+   HANDLE DRAGGING
+========================== */
+
+function enableHandleMove(obj){
+    createHandleDrag(obj, obj.startHandle, "start");
+    createHandleDrag(obj, obj.endHandle, "end");
+}
+
+function createHandleDrag(obj, handle, type){
+    const startHandleDrag = (e) => {
+        e.stopPropagation();
+
+        function move(ev){
+            if(ev.cancelable) ev.preventDefault();
+            const p = boardPosition(obj.boardEl, ev);
+            let x1 = Number(obj.line.getAttribute("x1"));
+            let y1 = Number(obj.line.getAttribute("y1"));
+            let x2 = Number(obj.line.getAttribute("x2"));
+            let y2 = Number(obj.line.getAttribute("y2"));
+
+            if(type === "start"){
+                x1 = p.x;
+                y1 = p.y;
+            } else {
+                x2 = p.x;
+                y2 = p.y;
+            }
+
+            updateGroupPosition(obj, x1, y1, x2, y2);
+        }
+
+        function up(){
+            document.removeEventListener("mousemove", move);
+            document.removeEventListener("touchmove", move);
+            document.removeEventListener("mouseup", up);
+            document.removeEventListener("touchend", up);
+            saveState();
+        }
+
+        document.addEventListener("mousemove", move);
+        document.addEventListener("touchmove", move, { passive: false });
+        document.addEventListener("mouseup", up);
+        document.addEventListener("touchend", up);
+    };
+
+    handle.addEventListener("mousedown", startHandleDrag);
+    handle.addEventListener("touchstart", startHandleDrag, { passive: false });
+}
+
+/* ==========================
+   DELETE & KEYBOARD SHORTCUTS
+========================== */
+
+function deleteSelected() {
+    if (selectedTiles.length === 0 && selectedLines.length === 0) return;
+
+    selectedTiles.forEach(tile => tile.remove());
+    selectedLines.forEach(obj => {
+        obj.group.remove();
+        const index = lineObjects.indexOf(obj);
+        if (index > -1) lineObjects.splice(index, 1);
+    });
+
+    selectedTiles = [];
+    selectedLines = [];
+    saveState();
+}
+
+deleteBtn.addEventListener("click", deleteSelected);
+
+document.addEventListener("keydown", e => {
+    const isCtrl = e.ctrlKey || e.metaKey;
+
+    if (e.key === "Delete" || e.key === "Backspace") {
+        deleteSelected();
+    }
+
+    if (isCtrl && e.key.toLowerCase() === "d") {
+        e.preventDefault();
+        duplicateSelected();
+    }
+
+    if (e.key.toLowerCase() === "r") {
+        rotateSelected(90);
+    }
+
+    if (isCtrl && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        undo();
+    }
+
+    if (isCtrl && e.key.toLowerCase() === "y") {
+        e.preventDefault();
+        redo();
+    }
+});
+
+document.addEventListener("click", e => {
+    if(!drawMode && !e.target.closest(".board") && !e.target.closest(".toolbar") && !e.target.closest(".sidebar-container")){
+        deselectEverything();
+    }
+});
+
+// Initial Setup
+updateGridDisplay();
+updateZoomTransform();
+saveState();
+
+</script>
+
+</body>
+</html>
